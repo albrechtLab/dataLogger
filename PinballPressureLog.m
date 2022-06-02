@@ -1,7 +1,11 @@
 clc;
 
-interval = 2000-5; % us per data point 
-recordSec = 10; % seconds of data to record
+waitTilDoneRecording = false; % wait for entire recording session to complete 
+                              % before reading serial data (versus readout
+                              % as data becomes available)
+
+interval = 1000; % us per data point 
+recordSec = 1; % seconds of data to record
 
 % check for existing serial object. if not, make it 
 if ~exist('s','var')
@@ -10,15 +14,10 @@ if ~exist('s','var')
     
     if (length(port) >= 1) 
         s = serialport(port(end),500000,'Parity','none');
-        %s.InputBufferSize = 4096;
         configureTerminator(s,'LF'); %s.Terminator = 'LF';
-        %s.Parity = 'even';
     else
         error('No Serial ports found');
     end
-else 
-    %fclose(s);
-    %pause(1);
 end
 
 % Open serial port if not already open
@@ -39,10 +38,10 @@ if strcmp(s.Status, 'open')
     flush(s);
 
     % set up acquisition settings
-    disp("Setting Parameters:");
-    cmd = ['i',num2str(interval)]; writeline(s, cmd); disp(cmd);
+    fprintf("Setting Parameters: ");
+    cmd = ['i',num2str(interval)]; writeline(s, cmd); fprintf(cmd);
     pause(1);
-    disp("... complete");
+    fprintf(" ... complete\n");
     
     fprintf("\nReady to begin recording for %d seconds at %f kHz (target).\n",recordSec,1000/interval); 
     fprintf("Press a key or mouse button to begin data logging.\n\n");
@@ -52,13 +51,15 @@ if strcmp(s.Status, 'open')
     writeline(s, ['R' num2str(recordSec)]);
     tic;
 
-%     fprintf('Time Remaining (s):    ');
-%     for tr = recordSec:-1:1
-%         fprintf('\b\b\b%3d',tr);
-%         pause(1);
-%     end
-%     fprintf('\n[%s] Recording complete\n', datestr(now));
-%     pause(3);
+    if (waitTilDoneRecording)
+        fprintf('Time Remaining (s):    ');
+        for tr = recordSec:-1:1
+            fprintf('\b\b\b%3d',tr);
+            pause(1);
+        end
+        fprintf('\n[%s] Recording complete\n', datestr(now));
+    end
+
     pause(3);
 
     % read & remove header
@@ -76,13 +77,15 @@ if strcmp(s.Status, 'open')
             if (mod(i,1000) == 0) fprintf("|"); end
             if (mod(i,5000) == 0) fprintf(" %d\n",i); end
 
-            if ((s.BytesAvailable == 0) && (toc < recordSec)) pause(1); end 
+            if ((s.BytesAvailable < 100) && (toc < recordSec)) pause(1); end 
         catch 
         end
     end
 
     fprintf("\n%d data points recorded in %0.6f seconds at %f kHz.\n", i, data(end,1)/1000000, 1000 / (data(end,1) / i));
 
-    figure(1); plot(data(:,1),data(:,2:6));
+    figure(1); plot(data(:,1),data(:,5:6)); 
+    xlabel('Time [us]'); ylabel('Output (raw)'); 
+    legend({'out1','out2'});
 end
 
