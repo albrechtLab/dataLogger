@@ -3,7 +3,7 @@ Arduino and compatible data loggers, simple and scriptable
 
 Reads 2 analog inputs and controls up to 3 digital outputs with microsecond precision. Data readout can be fast (memory storage) or continuous. 
 
-Can be uploaded to Arduino Uno, Metro M0, Metro M4, etc. with configurable input and output pin numbers
+Can be uploaded to Arduino Uno, Metro M0, Metro M4, etc. with configurable input and output pin numbers (FastDataLogger.ino)
 
 Speed characteristics:
 * Uno:       250 data points memory up to 2.8 kHz, continuous up to 1 kHz 
