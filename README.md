@@ -10,4 +10,4 @@ Speed characteristics:
 * Metro M0: 2000 data points memory up to >15 kHz, continuous up to ?? kHz
 * Metro M4: not tested 
 
-Scriptable via serial port control. Use the MATLAB functions to automatically stimulate and record (BlastMicrochamberTestMultiNew.m) or for continuous data collection for a prescribed duration ().
+Scriptable via serial port control. Use the MATLAB functions to automatically stimulate and record (BlastMicrochamberTestMultiNew.m) or for continuous data collection for a prescribed duration (PinballPressureLog.m).
