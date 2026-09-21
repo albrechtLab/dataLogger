@@ -10,19 +10,19 @@
 * logging_ms: logging interval in ms (2000 = 2s or 0.5Hz)
 *
 * Connect the following pins:
-* IN1 pin A0
-* IN2 pin A1
-* TRIGGER_IN pin 12
-* TRIGGER pin 3   (echoes TRIGGER_IN, possibly polarity-flipped)
-* TRIG_READY pin 6 (LED --> resistor --> GND)
-* REC_ON pin 4    (LED --> resistor --> GND)
-* OUT1 pin 5      (recording-active signal, echoes REC_ON; goes HIGH during any recording)
-* DEFAULT_IN pin 8 (connect to GND for default no-program mode)
-* TEST pin 7      (PWM test signal)
+* IN1          A0
+* IN2          A1
+* TRIGGER_IN   12
+* TRIGGER      3  (echoes TRIGGER_IN, possibly polarity-flipped)
+* TRIG_READY   6  (LED --> resistor --> GND)
+* REC_ON       4  (LED --> resistor --> GND)
+* OUT1         5  (recording-active signal, echoes REC_ON; goes HIGH during any recording)
+* DEFAULT_IN   8  (connect to GND for default no-program mode)
+* TEST         7  (PWM test signal)
 *
 * Recommended to use with M0 or faster boards. Arduino Uno
 * & variants should work but have limited memory (2048 bytes)
-* and therefore limited duration. Code tested on Adafruit Metro M0.
+* and therefore limited duration. Code tested on Adafruit Metro M0 and Uno R4.
 *
 * Updated:
 * 20220519 v1.1  DRA - added second input, sampling rate control and readout
@@ -52,10 +52,10 @@
 
 #define VERSION 1.50
 
-#define VIN1 A0
-#define VIN2 A1
-#define TRIGGER_IN  12
-#define TRIGGER      3
+#define VIN1         A0
+#define VIN2         A1
+#define TRIGGER_IN   12
+#define TRIGGER      3  // output echo TRIGGER_IN but may have opposite polarity
 #define TRIG_READY   6  // LED
 #define REC_ON       4  // LED
 #define OUT1         5  // recording-active signal (echoes REC_ON, not hardwired to LED)
@@ -103,10 +103,10 @@ uint16_t val2 = 0;
 
 // --- Sensor / scaling options ---
 int digital = 0;              // <=0 analog, >0 digital sensor
-float tempResistance = 100000.0;
+float tempResistance = 100000.0; // Ohms at 25C
 float beta           = 3950.0;
-float scaling        = 1.;
-uint16_t zero_offset = 0;
+float scaling        = 1.; // for analog input scaling
+uint16_t zero_offset = 0;  // for analog input scaling
 
 // --- Mode flags ---
 bool streamRecording = false;
@@ -117,7 +117,7 @@ bool memoryTriggered = false;   // true when M (triggered) variant
 // --- Memory-mode arrays ---
 // Always allocated; used only during memoryMode.
 uint16_t us_array[MEMLEN];    // t_us % US_MOD per sample
-uint16_t data_array[MEMLEN];  // channel 1 samples
+uint16_t data1_array[MEMLEN]; // channel 1 samples
 uint16_t data2_array[MEMLEN]; // channel 2 samples
 int memPoints = MEMLEN;       // number of points to capture (≤ MEMLEN)
 
@@ -140,8 +140,8 @@ statistic::Statistic<float, uint32_t, true> data2stat;
 
 /*---------------------------------------------------*/
 // Digital I2C sensors
-Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_2_4MS, TCS34725_GAIN_4X);
-INA226 INA(0x40);
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_2_4MS, TCS34725_GAIN_4X);  // int time and gain value for color sensor
+INA226 INA(0x40);  // I2C addr for current voltage sensor
 /*---------------------------------------------------*/
 
 /* ================================================================
@@ -162,7 +162,7 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(TRIGGER_IN), triggerChange, CHANGE);
 
-  SET_BITS
+  SET_BITS  // set ADC resolution
 
   Serial.begin(SERIAL_BAUD);
   Wire.begin();
@@ -181,7 +181,7 @@ void loop() {
   if (Serial.available()) {
 
     if (liveStream) {
-      liveStream       = false;
+      liveStream       = false;  // stop live stream if already running
       streamRecording  = false;
       Serial.flush();
     }
@@ -202,7 +202,7 @@ void loop() {
 
     char first = inputString.charAt(0);
 
-    /* -- Sampling interval -- */
+    /* -- Sampling interval (us) -- */
     if (first == 'i') {
       char* command = strtok(inputBytes, " ,") + 1;
       interval = atol(command);
@@ -213,7 +213,7 @@ void loop() {
       Serial.println(F(" kHz."));
     }
 
-    /* -- Logging interval -- */
+    /* -- Logging interval (ms) -- */
     else if (first == 'L') {
       char* command = strtok(inputBytes, " ,") + 1;
       logging_ms = atol(command);
@@ -229,7 +229,7 @@ void loop() {
       Serial.println();
     }
 
-    /* -- Number of channels -- */
+    /* -- Number of channels (1 or 2) -- */
     else if (first == 'n') {
       char* command = strtok(inputBytes, " ,") + 1;
       n = atol(command);
@@ -237,7 +237,7 @@ void loop() {
       Serial.println(n);
     }
 
-    /* -- Trigger polarity -- */
+    /* -- Trigger polarity (0 = LOW, 1 = HIGH) -- */
     else if (first == 'f') {
       char* command = strtok(inputBytes, " ,") + 1;
       triggerPolarity = (atol(command) == 1);
@@ -246,7 +246,7 @@ void loop() {
       triggerChange();
     }
 
-    /* -- Time unit -- */
+    /* -- Time unit (s, m, h, d) -- */
     else if (first == 'U') {
       char second = inputString.charAt(1);
       Serial.print(F("Time unit changed to: "));
@@ -271,9 +271,9 @@ void loop() {
       startLogging();
     }
 
-    /* -- Live mode -- */
+    /* -- Live mode (no time stamp, watch for exit) -- */
     else if (first == 'G') {
-      secondsToRecord = 86400;  // 1 day max
+      secondsToRecord = 24 * 60 * 60;  // 1 day max
       liveStream = true;
       startLogging();
     }
@@ -317,11 +317,11 @@ void loop() {
       memoryTriggered  = false;
       setRecordingOff();
     }
-
+      
     /* -- Digital sensor: Color -- */
     else if (first == 'C') {
       if (tcs.begin()) {
-        Serial.println(F("Color Sensor TCS34725 detected. Mode changed to digital."));
+        Serial.println(F("Color Sensor TCS34725 detected. Mode changed to digital. Colors are blue and red."));
         digital = 1;
       } else {
         Serial.println(F("Color Sensor TCS34725 NOT detected."));
@@ -359,7 +359,7 @@ void loop() {
       Serial.println(")");
     }
 
-    /* -- Thermistor mode -- */
+    /* -- Thermistor mode (####*100 Ohm resistance at 25C) -- */
     else if (first == 't') {
       char* command = strtok(inputBytes, " ,") + 1;
       tempResistance = (float)atol(command) * 100.;
@@ -367,7 +367,7 @@ void loop() {
       Serial.print(tempResistance / 1000.);
       Serial.println(F(" kOhms"));
       digital = -1;
-      if (interval < 5000) interval = 5000;
+      if (interval < 5000) interval = 5000;  // minimum sampling interval 5ms
     }
 
     /* -- Help / unknown -- */
@@ -416,7 +416,7 @@ void loop() {
 
       // Sample (analog only in memory mode)
       us_array[t]   = (uint16_t)(t_us % US_MOD);
-      data_array[t] = analogRead(VIN1);
+      data1_array[t] = analogRead(VIN1);
       if (n > 1) data2_array[t] = analogRead(VIN2);
 
       t++;
@@ -455,7 +455,7 @@ void loop() {
 
       Serial.print(t_reconstructed);
       Serial.print(',');
-      Serial.print(data_array[i]);
+      Serial.print(data1_array[i]);
       if (n > 1) {
         Serial.print(',');
         Serial.print(data2_array[i]);
@@ -485,6 +485,16 @@ void loop() {
      ================================================================ */
   if (streamRecording) {
 
+  /*---------------------------------*/
+  /*
+   * Current sensor options: (negative = analog; positive = digital)
+   *   -2: analog 100k thermistor
+   *   -1: dual analog input, scaled
+   ***  0: dual analog input, no scaling
+   *    1: TCS34725 Color sensor (blue, red only)
+   *    2: INA226 power (voltage,current) sensor
+  */
+
     // Read current sensor values
     switch (digital) {
       case 0:
@@ -493,7 +503,7 @@ void loop() {
         break;
       case 1: {
         uint16_t g, c;
-        tcs.getRawData(&val1, &g, &val2, &c);
+        tcs.getRawData(&val1, &g, &val2, &c);  // val1 represents red light and val2 blue
         break;
       }
       case 2:
@@ -517,11 +527,11 @@ void loop() {
     unsigned long int us   = micros();
     unsigned long int t_us = us - start_us;
 
-    unsigned int dt = us - prev_us + 5;
+    unsigned int dt = us - prev_us + 5;  // allow 5 us for commands
     if (dt < interval) delayMicroseconds(interval - dt);
     prev_us = micros();
 
-    if (logging_ms == 0 || liveStream) {
+    if (logging_ms == 0 || liveStream) {  // for fast stream, no stats
       // Fast stream: one line per sample
       if (!liveStream) {
         Serial.print(t_us);
@@ -591,10 +601,10 @@ void loop() {
     // Default jumper: auto-configure summary logging and wait for trigger
     if (digitalRead(DEFAULT_IN) == LOW) {
       Serial.print(F("Default triggered logging: "));
-      n               = 1;
-      interval        = 500;
-      logging_ms      = 2000;
-      secondsToRecord = 86400;
+      n               = 1;     // 1 channel
+      interval        = 500;   // us ==> 2 kHz
+      logging_ms      = 2000;  // ms ==> 0.5 Hz
+      secondsToRecord = 24 * 60 * 60;  // 24h 
       triggerPolarity = 0;
       Serial.print(secondsToRecord);
       Serial.print(" ");
