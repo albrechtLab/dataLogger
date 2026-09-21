@@ -1,4 +1,4 @@
-/* DataLogSummary
+/* DataLogUniversal
 
 * This code rapidly acquires data from 2 voltage inputs and streams to the serial port,
 * or calculates summary statistics and reports these at a set interval.
